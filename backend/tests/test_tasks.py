@@ -8,12 +8,7 @@ class TestTaskCreate:
             "/tasks",
             json={"title": "New Task", "priority": 3}
         )
-        assert response.status_code == 201
-        data = response.json()
-        assert data["title"] == "New Task"
-        assert data["priority"] == 3
-        assert data["completed"] is False
-        assert data["user_id"] is None
+        assert response.status_code == 401
 
     def test_create_task_with_auth(self, client, auth_headers):
         response = client.post(
@@ -27,81 +22,103 @@ class TestTaskCreate:
         assert data["priority"] == 5
         assert data["user_id"] == 1
 
-    def test_create_task_with_description(self, client):
+    def test_create_task_with_description(self, client, auth_headers):
         response = client.post(
             "/tasks",
+            headers=auth_headers,
             json={"title": "Task", "description": "Some description"}
         )
         assert response.status_code == 201
         assert response.json()["description"] == "Some description"
 
-    def test_create_task_with_due_date(self, client):
+    def test_create_task_with_due_date(self, client, auth_headers):
         due_date = (datetime.now() + timedelta(days=7)).isoformat()
         response = client.post(
             "/tasks",
+            headers=auth_headers,
             json={"title": "Task", "due_date": due_date}
         )
         assert response.status_code == 201
         assert response.json()["due_date"] is not None
 
-    def test_create_task_with_tags(self, client, tag):
+    def test_create_task_with_tags(self, client, auth_headers, tag):
         response = client.post(
             "/tasks",
+            headers=auth_headers,
             json={"title": "Task", "tag_ids": [tag.id]}
         )
         assert response.status_code == 201
         assert len(response.json()["tags"]) == 1
 
-    def test_create_task_invalid_priority(self, client):
+    def test_create_task_invalid_priority(self, client, auth_headers):
         response = client.post(
             "/tasks",
+            headers=auth_headers,
             json={"title": "Task", "priority": 10}
         )
         assert response.status_code == 422
 
-    def test_create_task_priority_zero(self, client):
+    def test_create_task_priority_zero(self, client, auth_headers):
         response = client.post(
             "/tasks",
+            headers=auth_headers,
             json={"title": "Task", "priority": 0}
         )
         assert response.status_code == 422
 
-    def test_create_task_missing_title(self, client):
+    def test_create_task_missing_title(self, client, auth_headers):
         response = client.post(
             "/tasks",
+            headers=auth_headers,
             json={"description": "No title"}
         )
         assert response.status_code == 422
 
 
 class TestTaskRead:
-    def test_get_all_tasks_without_auth(self, client, public_task):
+    def test_get_all_tasks_without_auth(self, client):
         response = client.get("/tasks")
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
-        assert data[0]["title"] == "Public Task"
+        assert response.status_code == 401
 
-    def test_get_all_tasks_with_auth_sees_public_and_private(self, client, auth_headers, public_task, private_task):
+    def test_get_all_tasks_with_auth(self, client, auth_headers, db):
+        from app.models import Task
+        task = Task(title="My Task", user_id=1)
+        db.add(task)
+        db.commit()
+
         response = client.get("/tasks", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 2
+        assert len(data) == 1
+        assert data[0]["title"] == "My Task"
 
-    def test_get_single_task(self, client, public_task):
-        response = client.get(f"/tasks/{public_task.id}")
+    def test_get_single_task(self, client, auth_headers, db):
+        from app.models import Task
+        task = Task(title="My Task", user_id=1)
+        db.add(task)
+        db.commit()
+        db.refresh(task)
+
+        response = client.get(f"/tasks/{task.id}", headers=auth_headers)
         assert response.status_code == 200
-        assert response.json()["title"] == "Public Task"
+        assert response.json()["title"] == "My Task"
 
-    def test_get_single_task_not_found(self, client):
-        response = client.get("/tasks/9999")
+    def test_get_single_task_not_found(self, client, auth_headers):
+        response = client.get("/tasks/9999", headers=auth_headers)
         assert response.status_code == 404
 
 
 class TestTaskUpdate:
-    def test_update_task(self, client, public_task):
+    def test_update_task(self, client, auth_headers, db):
+        from app.models import Task
+        task = Task(title="My Task", user_id=1)
+        db.add(task)
+        db.commit()
+        db.refresh(task)
+
         response = client.patch(
-            f"/tasks/{public_task.id}",
+            f"/tasks/{task.id}",
+            headers=auth_headers,
             json={"title": "Updated Title", "priority": 5}
         )
         assert response.status_code == 200
@@ -109,65 +126,86 @@ class TestTaskUpdate:
         assert data["title"] == "Updated Title"
         assert data["priority"] == 5
 
-    def test_update_task_partial(self, client, public_task):
+    def test_update_task_partial(self, client, auth_headers, db):
+        from app.models import Task
+        task = Task(title="My Task", user_id=1)
+        db.add(task)
+        db.commit()
+        db.refresh(task)
+
         response = client.patch(
-            f"/tasks/{public_task.id}",
+            f"/tasks/{task.id}",
+            headers=auth_headers,
             json={"completed": True}
         )
         assert response.status_code == 200
         assert response.json()["completed"] is True
-        assert response.json()["title"] == "Public Task"
+        assert response.json()["title"] == "My Task"
 
-    def test_update_task_not_found(self, client):
+    def test_update_task_not_found(self, client, auth_headers):
         response = client.patch(
             "/tasks/9999",
+            headers=auth_headers,
             json={"title": "Updated"}
         )
         assert response.status_code == 404
 
 
 class TestTaskDelete:
-    def test_delete_task(self, client, public_task):
-        response = client.delete(f"/tasks/{public_task.id}")
+    def test_delete_task(self, client, auth_headers, db):
+        from app.models import Task
+        task = Task(title="My Task", user_id=1)
+        db.add(task)
+        db.commit()
+        db.refresh(task)
+
+        response = client.delete(f"/tasks/{task.id}", headers=auth_headers)
         assert response.status_code == 204
 
-        get_response = client.get(f"/tasks/{public_task.id}")
+        get_response = client.get(f"/tasks/{task.id}", headers=auth_headers)
         assert get_response.status_code == 404
 
-    def test_delete_task_not_found(self, client):
-        response = client.delete("/tasks/9999")
+    def test_delete_task_not_found(self, client, auth_headers):
+        response = client.delete("/tasks/9999", headers=auth_headers)
         assert response.status_code == 404
 
 
 class TestTaskToggle:
-    def test_toggle_task_completed(self, client, public_task):
-        assert public_task.completed is False
+    def test_toggle_task_completed(self, client, auth_headers, db):
+        from app.models import Task
+        task = Task(title="My Task", user_id=1)
+        db.add(task)
+        db.commit()
+        db.refresh(task)
 
-        response = client.patch(f"/tasks/{public_task.id}/toggle")
+        assert task.completed is False
+
+        response = client.patch(f"/tasks/{task.id}/toggle", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["completed"] is True
 
-        response = client.patch(f"/tasks/{public_task.id}/toggle")
+        response = client.patch(f"/tasks/{task.id}/toggle", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["completed"] is False
 
-    def test_toggle_task_not_found(self, client):
-        response = client.patch("/tasks/9999/toggle")
+    def test_toggle_task_not_found(self, client, auth_headers):
+        response = client.patch("/tasks/9999/toggle", headers=auth_headers)
         assert response.status_code == 404
 
 
 class TestTaskReorder:
-    def test_reorder_tasks(self, client, db):
+    def test_reorder_tasks(self, client, auth_headers, db):
         from app.models import Task
 
-        task1 = Task(title="Task 1", position=1.0)
-        task2 = Task(title="Task 2", position=2.0)
-        task3 = Task(title="Task 3", position=3.0)
+        task1 = Task(title="Task 1", user_id=1, position=1.0)
+        task2 = Task(title="Task 2", user_id=1, position=2.0)
+        task3 = Task(title="Task 3", user_id=1, position=3.0)
         db.add_all([task1, task2, task3])
         db.commit()
 
         response = client.put(
             "/tasks/reorder",
+            headers=auth_headers,
             json={
                 "tasks": [
                     {"id": task1.id, "position": 3.0},

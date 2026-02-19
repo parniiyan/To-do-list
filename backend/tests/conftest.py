@@ -81,7 +81,7 @@ def auth_headers(client, user):
 
 
 @pytest.fixture
-def auth_headers_user2(client, user2):
+def auth_headers_user2(client, user, user2):
     response = client.post(
         "/auth/login",
         data={"username": user2[0]["email"], "password": user2[0]["password"]}
@@ -91,39 +91,9 @@ def auth_headers_user2(client, user2):
 
 
 @pytest.fixture
-def public_task(db, user):
-    from app.models import Task
-    task = Task(title="Public Task", user_id=None)
-    db.add(task)
-    db.commit()
-    db.refresh(task)
-    return task
-
-
-@pytest.fixture
-def private_task(db, user):
-    from app.models import Task
-    task = Task(title="Private Task", user_id=user[1].id)
-    db.add(task)
-    db.commit()
-    db.refresh(task)
-    return task
-
-
-@pytest.fixture
 def tag(db, user):
     from app.models import Tag
     tag = Tag(name="work", color="#ff0000", user_id=user[1].id)
-    db.add(tag)
-    db.commit()
-    db.refresh(tag)
-    return tag
-
-
-@pytest.fixture
-def public_tag(db):
-    from app.models import Tag
-    tag = Tag(name="public", color="#00ff00", user_id=None)
     db.add(tag)
     db.commit()
     db.refresh(tag)
