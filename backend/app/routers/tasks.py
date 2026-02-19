@@ -7,7 +7,7 @@ from sqlalchemy import desc, asc
 from app.database import get_db
 from app.models import Task, Tag, User
 from app.schemas import TaskCreate, TaskUpdate, TaskResponse, ReorderRequest
-from app.auth import get_current_user_optional
+from app.auth import get_current_user
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -23,15 +23,10 @@ def get_tasks(
     no_due_date: Optional[bool] = Query(None, description="Show tasks without due date"),
     sort_by: Optional[str] = Query("position", description="Sort by: position, due_date, priority, created_at"),
     sort_order: Optional[str] = Query("asc", description="Sort direction: asc, desc"),
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Task)
-
-    if current_user:
-        query = query.filter((Task.user_id == current_user.id) | (Task.user_id == None))
-    else:
-        query = query.filter(Task.user_id == None)
+    query = db.query(Task).filter(Task.user_id == current_user.id)
 
     if status == "completed":
         query = query.filter(Task.completed == True)
@@ -71,7 +66,7 @@ def get_tasks(
 @router.post("", response_model=TaskResponse, status_code=201)
 def create_task(
     task: TaskCreate,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     db_task = Task(
@@ -79,7 +74,7 @@ def create_task(
         description=task.description,
         priority=task.priority,
         due_date=task.due_date,
-        user_id=current_user.id if current_user else None,
+        user_id=current_user.id,
     )
 
     if task.tag_ids:
@@ -95,15 +90,11 @@ def create_task(
 @router.get("/{task_id}", response_model=TaskResponse)
 def get_task(
     task_id: int,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     task = db.query(Task).filter(Task.id == task_id).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if current_user and task.user_id not in (current_user.id, None):
-        raise HTTPException(status_code=404, detail="Task not found")
-    if not current_user and task.user_id is not None:
+    if not task or task.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
@@ -112,15 +103,11 @@ def get_task(
 def update_task(
     task_id: int,
     task_update: TaskUpdate,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     task = db.query(Task).filter(Task.id == task_id).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if current_user and task.user_id not in (current_user.id, None):
-        raise HTTPException(status_code=404, detail="Task not found")
-    if not current_user and task.user_id is not None:
+    if not task or task.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Task not found")
 
     update_data = task_update.model_dump(exclude_unset=True)
@@ -142,15 +129,11 @@ def update_task(
 @router.delete("/{task_id}", status_code=204)
 def delete_task(
     task_id: int,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     task = db.query(Task).filter(Task.id == task_id).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if current_user and task.user_id not in (current_user.id, None):
-        raise HTTPException(status_code=404, detail="Task not found")
-    if not current_user and task.user_id is not None:
+    if not task or task.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Task not found")
 
     db.delete(task)
@@ -161,15 +144,11 @@ def delete_task(
 @router.patch("/{task_id}/toggle", response_model=TaskResponse)
 def toggle_task(
     task_id: int,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     task = db.query(Task).filter(Task.id == task_id).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if current_user and task.user_id not in (current_user.id, None):
-        raise HTTPException(status_code=404, detail="Task not found")
-    if not current_user and task.user_id is not None:
+    if not task or task.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Task not found")
 
     task.completed = not task.completed
@@ -181,16 +160,12 @@ def toggle_task(
 @router.put("/reorder", status_code=204)
 def reorder_tasks(
     reorder: ReorderRequest,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     for item in reorder.tasks:
         task = db.query(Task).filter(Task.id == item.id).first()
-        if task:
-            if current_user and task.user_id not in (current_user.id, None):
-                continue
-            if not current_user and task.user_id is not None:
-                continue
+        if task and task.user_id == current_user.id:
             task.position = item.position
 
     db.commit()
