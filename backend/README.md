@@ -97,7 +97,7 @@ Response:
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `status` | string | Filter: `completed`, `pending` |
-| `priority` | string | Filter: `low`, `medium`, `high` |
+| `priority` | int | Filter: 1-5 |
 | `tag_id` | int | Filter by tag |
 | `due_before` | datetime | Due before date |
 | `due_after` | datetime | Due after date |
@@ -114,10 +114,10 @@ Response:
   "title": "Task title",
   "description": "Optional description",
   "completed": false,
-  "priority": "medium",
+  "priority": 3,
   "due_date": "2026-02-20T10:00:00",
   "position": 1.0,
-  "user_id": null,
+  "user_id": 1,
   "created_at": "2026-02-18T10:00:00",
   "updated_at": "2026-02-18T10:00:00",
   "tags": []
@@ -130,7 +130,7 @@ Response:
 {
   "title": "Buy groceries",
   "description": "Milk, eggs, bread",
-  "priority": "high",
+  "priority": 4,
   "due_date": "2026-02-20T10:00:00",
   "tag_ids": [1, 2]
 }
@@ -142,7 +142,7 @@ Response:
 {
   "title": "Updated title",
   "completed": true,
-  "priority": "low",
+  "priority": 2,
   "tag_ids": [1]
 }
 ```
@@ -176,6 +176,7 @@ Response:
   "id": 1,
   "name": "work",
   "color": "#ff0000",
+  "user_id": 1,
   "created_at": "2026-02-18T10:00:00"
 }
 ```
@@ -193,33 +194,33 @@ Response:
 
 ## Frontend Requirements
 
-### Stage 1: Core Task Management
+### Stage 1: Authentication
+- User registration
+- User login (JWT)
+- Associate tasks/tags with logged-in user
+- Protected routes (redirect to login if not authenticated)
+
+### Stage 2: Core Task Management
 - Display all tasks in a list
 - Create new task (title required, optional description/priority/due_date)
 - Edit existing task
 - Delete task
 - Toggle task completion
 
-### Stage 2: Filtering & Sorting
+### Stage 3: Filtering & Sorting
 - Filter by: completed/pending
-- Filter by priority
+- Filter by priority (1-5)
 - Sort by: position, due date, priority, creation date
 
-### Stage 3: Tags
+### Stage 4: Tags
 - Display tags
 - Create/delete tags
 - Assign tags to tasks
 - Filter tasks by tag
 
-### Stage 4: Drag & Drop
+### Stage 5: Drag & Drop
 - Reorder tasks via drag and drop
 - Persist order to backend
-
-### Stage 5: Authentication
-- User registration
-- User login (JWT)
-- Private tasks per user
-- Associate tasks/tags with logged-in user
 
 ---
 
@@ -246,7 +247,7 @@ backend/
 
 ## Authentication Notes
 
-- Tasks/tags without `user_id` are public (backward compatible)
-- When logged in, you see your tasks + public tasks
-- Created tasks are associated with the logged-in user
+- All task and tag endpoints require authentication
 - Use `Authorization: Bearer <token>` header for authenticated requests
+- Tasks and tags are private to each user
+- Register and login to get a JWT token
